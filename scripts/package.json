@@ -1,0 +1,10 @@
+{
+  "name": "claude-usage-deps",
+  "version": "1.0.0",
+  "description": "Dependencias para Modo B (Playwright). Solo se instalan si no hay Claude Code.",
+  "dependencies": {
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "playwright": "^1.40.0"
+  }
+}

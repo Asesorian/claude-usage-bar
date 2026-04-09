@@ -1,0 +1,34 @@
+{
+  "name": "claude-usage-bar",
+  "displayName": "Claude Usage Bar",
+  "description": "Muestra en tiempo real el uso de Claude (5h y 7d) en la barra de estado. Auto-detecta Claude Code — sin configuración manual si lo tienes instalado.",
+  "version": "0.2.0",
+  "publisher": "asesorian",
+  "repository": { "type": "git", "url": "https://github.com/Asesorian/claude-usage-bar" },
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Claude Usage Bar",
+      "properties": {
+        "claudeUsage.cookies": {
+          "type": "string",
+          "default": "",
+          "description": "[Opcional] Cookie sessionKey de claude.ai. Solo necesario si NO tienes Claude Code instalado. Ejemplo: sessionKey=sk-ant-..."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,14 +1,19 @@
 /**
  * claude-usage-bar — server.js
  *
- * Modo A: OAuth Claude Code (sin Playwright) — solo plan Max
+ * Modo A: OAuth Claude Code — plan Max, zero config
  * Modo B: Playwright + sessionKey — plan Pro y Max
  *
- * Logica:
- *   1. Lee el plan desde .credentials.json
- *   2. Si es Max → intenta OAuth directamente (sin roundtrip fallido)
- *   3. Si es Pro o desconocido → va directo a Playwright si hay sessionKey
- *   4. Si OAuth falla con 401 (Max degradado a Pro?) → fallback a Playwright
+ * Orden de resolucion de credenciales (sessionKey):
+ *   1. Argumento SESSION_KEY (configurado manualmente en VS Code settings)
+ *   2. Cookie sessionKey leida automaticamente de Chrome (Windows/Mac)
+ *   3. Cookie sessionKey leida automaticamente de Edge (Windows)
+ *
+ * Flujo completo:
+ *   - Plan Max + Claude Code instalado → OAuth directo, sin Playwright
+ *   - Plan Pro + Chrome/Edge logueado en claude.ai → auto-lee sessionKey, sin configuracion
+ *   - Plan Pro + sessionKey manual → Playwright con la key configurada
+ *   - Ninguna credencial → error con mensaje de ayuda
  */
 
 const OUTPUT_FILE = process.argv[2];
@@ -40,11 +45,7 @@ function writeErr(msg) {
   process.stdout.write('err: ' + msg + '\n');
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// -- Lectura de credenciales --------------------------------------------------
+// -- Credenciales Claude Code -------------------------------------------------
 
 function readCredentials() {
   try {
@@ -55,11 +56,9 @@ function readCredentials() {
 }
 
 function getClaudeCodeToken() {
-  // Metodo 1: .credentials.json (Windows, Linux, Mac moderno)
   const creds = readCredentials();
   if (creds?.claudeAiOauth?.accessToken) return creds.claudeAiOauth.accessToken;
 
-  // Metodo 2: macOS Keychain (Mac antiguo)
   if (process.platform === 'darwin') {
     try {
       const { execSync } = require('child_process');
@@ -78,10 +77,45 @@ function getClaudeCodeToken() {
 function getSubscriptionType() {
   const creds = readCredentials();
   const sub = creds?.claudeAiOauth?.subscriptionType?.toLowerCase() || 'unknown';
-  // max_5x, max_20x, max → todo lo que empiece por 'max' es Max
   if (sub.startsWith('max')) return 'max';
   if (sub === 'pro') return 'pro';
   return 'unknown';
+}
+
+// -- Auto-deteccion sessionKey desde Chrome / Edge ----------------------------
+
+/**
+ * Intenta leer la cookie sessionKey de claude.ai desde el perfil del navegador.
+ * Funciona en Windows y Mac con Chrome y Edge.
+ * Devuelve la sessionKey o null si no se puede leer.
+ */
+function getSessionKeyFromBrowser() {
+  return new Promise((resolve) => {
+    try {
+      const chromeCookies = require('chrome-cookies-secure');
+      const browsers = ['chrome', 'edge'];
+      let attempted = 0;
+
+      function tryNext(index) {
+        if (index >= browsers.length) { resolve(null); return; }
+        const browser = browsers[index];
+        chromeCookies.getCookies('https://claude.ai', browser, (err, cookies) => {
+          attempted++;
+          if (!err && cookies?.sessionKey) {
+            process.stdout.write(`sessionKey auto-detectada desde ${browser}\n`);
+            resolve(cookies.sessionKey);
+          } else {
+            tryNext(index + 1);
+          }
+        });
+      }
+
+      tryNext(0);
+    } catch (e) {
+      // chrome-cookies-secure no disponible o error inesperado
+      resolve(null);
+    }
+  });
 }
 
 // -- Modo A: OAuth (Max) ------------------------------------------------------
@@ -100,7 +134,7 @@ async function fetchViaOAuth(token) {
   throw err;
 }
 
-// -- Modo B: Playwright (Pro y Max) -------------------------------------------
+// -- Modo B: Playwright -------------------------------------------------------
 
 async function buildPlaywrightFetcher(sessionKey) {
   const { chromium } = require('playwright-extra');
@@ -174,7 +208,7 @@ async function run() {
 
   process.stdout.write(`plan detectado: ${subscriptionType}\n`);
 
-  // Plan Max con Claude Code → Modo A directo (sin Playwright)
+  // 1. Plan Max + Claude Code → OAuth directo
   if (subscriptionType === 'max' && oauthToken) {
     try {
       const data = await fetchViaOAuth(oauthToken);
@@ -184,32 +218,33 @@ async function run() {
           const fresh = getClaudeCodeToken() || oauthToken;
           writeOk(await fetchViaOAuth(fresh), 'claude-code');
         } catch (e) {
-          // Si OAuth falla en polling → no es fatal, reintentar en siguiente ciclo
           if (e.status !== 401) writeErr(e.message);
         }
       }, POLL_INTERVAL_MS);
       return;
     } catch (e) {
-      if (e.status === 401) {
-        process.stdout.write('OAuth 401 inesperado en Max → fallback Playwright\n');
-        // Caer a Playwright abajo
-      } else {
-        writeErr(e.message);
-        return;
-      }
+      if (e.status !== 401) { writeErr(e.message); return; }
+      process.stdout.write('OAuth 401 inesperado en Max → fallback Playwright\n');
     }
   }
 
-  // Plan Pro, desconocido, o fallback desde Max con 401 → Modo B (Playwright)
-  if (!SESSION_KEY) {
+  // 2. Resolver sessionKey: manual > Chrome/Edge auto-deteccion
+  let resolvedKey = SESSION_KEY;
+
+  if (!resolvedKey) {
+    process.stdout.write('Sin sessionKey manual, intentando auto-deteccion desde navegador...\n');
+    resolvedKey = await getSessionKeyFromBrowser();
+  }
+
+  if (!resolvedKey) {
     const hint = subscriptionType === 'pro'
-      ? 'Plan Pro detectado: configura claudeUsage.cookies con tu sessionKey de claude.ai'
-      : 'No se encontraron credenciales validas. Configura claudeUsage.cookies en VS Code settings.';
+      ? 'Plan Pro: abre claude.ai en Chrome o Edge, o configura claudeUsage.cookies en VS Code settings'
+      : 'Configura claudeUsage.cookies en VS Code settings o abre claude.ai en Chrome/Edge';
     writeErr(hint);
     process.exit(1);
   }
 
-  await runPlaywrightMode(SESSION_KEY);
+  await runPlaywrightMode(resolvedKey);
 }
 
 run().catch(e => {

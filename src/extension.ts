@@ -10,16 +10,32 @@ let serverProcess: ChildProcess | undefined;
 let usageFile: string;
 let storageDir: string;
 
-function getClaudeCodeToken(): string | null {
+// -- Deteccion plan y credenciales -------------------------------------------
+
+function readClaudeCredentials(): any {
   try {
     const credsPath = path.join(os.homedir(), '.claude', '.credentials.json');
-    const data = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-    const token = (data as any)?.claudeAiOauth?.accessToken;
-    if (token) return token;
+    return JSON.parse(fs.readFileSync(credsPath, 'utf8'));
   } catch {}
+  return null;
+}
+
+function getClaudeCodeToken(): string | null {
+  const creds = readClaudeCredentials();
+  if (creds?.claudeAiOauth?.accessToken) return creds.claudeAiOauth.accessToken;
   if (process.platform === 'darwin') return 'keychain-pending';
   return null;
 }
+
+function getSubscriptionType(): 'max' | 'pro' | 'unknown' {
+  const creds = readClaudeCredentials();
+  const sub = (creds?.claudeAiOauth?.subscriptionType || '').toLowerCase();
+  if (sub.startsWith('max')) return 'max';
+  if (sub === 'pro') return 'pro';
+  return 'unknown';
+}
+
+// -- Activacion --------------------------------------------------------------
 
 export async function activate(context: vscode.ExtensionContext) {
   storageDir = context.globalStorageUri.fsPath;
@@ -45,32 +61,35 @@ export async function activate(context: vscode.ExtensionContext) {
   pollTimer = setInterval(readAndShow, 5000);
 }
 
+// -- Setup -------------------------------------------------------------------
+
 async function ensureSetup(context: vscode.ExtensionContext) {
   fs.mkdirSync(storageDir, { recursive: true });
 
+  // Siempre copiar el server.js mas reciente
   const src = path.join(context.extensionPath, 'scripts', 'server.js');
   const dst = path.join(storageDir, 'server.js');
   fs.copyFileSync(src, dst);
 
-  const cookies = vscode.workspace.getConfiguration('claudeUsage').get<string>('cookies', '').trim();
+  const subType      = getSubscriptionType();
   const hasClaudeCode = getClaudeCodeToken() !== null;
 
-  // Playwright solo se instala si hay sessionKey configurada (Modo B o fallback)
-  if (!cookies && !hasClaudeCode) {
-    statusBarItem.text = '$(cloud) Claude: instala Claude Code o configura cookies';
+  // Plan Max + Claude Code: solo necesita OAuth, no Playwright
+  if (subType === 'max' && hasClaudeCode) {
+    statusBarItem.text = '$(cloud) Claude: listo (Max, OAuth)';
     return;
   }
 
-  if (cookies) {
-    const depsMarker = path.join(storageDir, 'node_modules', 'playwright-extra');
-    if (!fs.existsSync(depsMarker)) {
-      const pkgSrc = path.join(context.extensionPath, 'scripts', 'package.json');
-      const pkgDst = path.join(storageDir, 'package.json');
-      fs.copyFileSync(pkgSrc, pkgDst);
-      statusBarItem.text = '$(sync~spin) Claude: instalando Playwright (1 vez, ~2 min)...';
-      await runCommand('npm install', storageDir);
-      await runCommand('npx playwright install chromium', storageDir);
-    }
+  // Cualquier otro caso: instalar deps (Playwright + chrome-cookies-secure)
+  const depsMarker = path.join(storageDir, 'node_modules', 'playwright-extra');
+  if (!fs.existsSync(depsMarker)) {
+    const pkgSrc = path.join(context.extensionPath, 'scripts', 'package.json');
+    const pkgDst = path.join(storageDir, 'package.json');
+    fs.copyFileSync(pkgSrc, pkgDst);
+
+    statusBarItem.text = '$(sync~spin) Claude: instalando dependencias (1 vez, ~2 min)...';
+    await runCommand('npm install', storageDir);
+    await runCommand('npx playwright install chromium', storageDir);
   }
 
   statusBarItem.text = '$(cloud) Claude: listo';
@@ -89,22 +108,21 @@ function runCommand(cmd: string, cwd: string): Promise<void> {
   });
 }
 
+// -- Servidor ----------------------------------------------------------------
+
 function startServer(context: vscode.ExtensionContext) {
-  const cookies = vscode.workspace.getConfiguration('claudeUsage').get<string>('cookies', '').trim();
-  const hasClaudeCode = getClaudeCodeToken() !== null;
-
-  if (!hasClaudeCode && !cookies) {
-    statusBarItem.text = '$(cloud) Claude: instala Claude Code o configura cookies';
-    return;
-  }
-
-  const match = cookies.match(/sessionKey=([^;]+)/);
+  const cookies   = vscode.workspace.getConfiguration('claudeUsage').get<string>('cookies', '').trim();
+  const match     = cookies.match(/sessionKey=([^;]+)/);
   const sessionKey = match ? match[1].trim() : cookies.trim();
 
   const serverScript = path.join(storageDir, 'server.js');
 
-  // Siempre pasar sessionKey como arg3 para que server.js pueda hacer fallback a Playwright
-  serverProcess = spawn('node', [serverScript, usageFile, sessionKey], {
+  // Pasar sessionKey si hay. Si no, server.js intentara auto-deteccion desde Chrome/Edge
+  const args = sessionKey
+    ? [serverScript, usageFile, sessionKey]
+    : [serverScript, usageFile];
+
+  serverProcess = spawn('node', args, {
     cwd: storageDir,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -123,6 +141,8 @@ function restartServer(context: vscode.ExtensionContext) {
   startServer(context);
 }
 
+// -- Barra de estado ---------------------------------------------------------
+
 function readAndShow() {
   try {
     if (!fs.existsSync(usageFile)) return;
@@ -130,7 +150,7 @@ function readAndShow() {
 
     if (data.ok) {
       const src = data.source === 'claude-code' ? 'CC' : 'AI';
-      statusBarItem.text = `$(cloud) ${src} ${data.five_hour}% . ${data.seven_day}%`;
+      statusBarItem.text = `$(cloud) ${src} ${data.five_hour}% · ${data.seven_day}%`;
       statusBarItem.tooltip = buildTooltip(data);
 
       if (data.five_hour >= 90) {
@@ -180,6 +200,8 @@ function buildTooltip(data: any): vscode.MarkdownString {
   md.isTrusted = true;
   return md;
 }
+
+// -- Desactivacion -----------------------------------------------------------
 
 export function deactivate() {
   if (pollTimer) clearInterval(pollTimer);

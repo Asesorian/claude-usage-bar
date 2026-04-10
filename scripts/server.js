@@ -1,11 +1,14 @@
 /**
  * claude-usage-bar — server.js
  *
- * Modo A: OAuth Claude Code (sin Playwright) — funciona en plan Max
- * Modo B: Playwright + sessionKey — funciona en Pro y Max
+ * Modo A: OAuth Claude Code (sin Playwright) — solo plan Max
+ * Modo B: Playwright + sessionKey — plan Pro y Max
  *
- * Logica: intenta Modo A primero. Si falla con 401 (plan Pro),
- * cae automaticamente a Modo B si hay sessionKey disponible.
+ * Logica:
+ *   1. Lee el plan desde .credentials.json
+ *   2. Si es Max → intenta OAuth directamente (sin roundtrip fallido)
+ *   3. Si es Pro o desconocido → va directo a Playwright si hay sessionKey
+ *   4. Si OAuth falla con 401 (Max degradado a Pro?) → fallback a Playwright
  */
 
 const OUTPUT_FILE = process.argv[2];
@@ -41,32 +44,48 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// -- Modo A: OAuth ------------------------------------------------------------
+// -- Lectura de credenciales --------------------------------------------------
 
-function getClaudeCodeToken() {
+function readCredentials() {
   try {
     const credsPath = path.join(os.homedir(), '.claude', '.credentials.json');
-    const data  = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-    const token = data?.claudeAiOauth?.accessToken;
-    if (token) return token;
+    return JSON.parse(fs.readFileSync(credsPath, 'utf8'));
   } catch {}
+  return null;
+}
 
+function getClaudeCodeToken() {
+  // Metodo 1: .credentials.json (Windows, Linux, Mac moderno)
+  const creds = readCredentials();
+  if (creds?.claudeAiOauth?.accessToken) return creds.claudeAiOauth.accessToken;
+
+  // Metodo 2: macOS Keychain (Mac antiguo)
   if (process.platform === 'darwin') {
     try {
       const { execSync } = require('child_process');
-      const raw   = execSync(
+      const raw  = execSync(
         'security find-generic-password -s "Claude Code-credentials" -w',
         { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
       ).trim();
-      const data  = JSON.parse(raw);
-      const token = data?.claudeAiOauth?.accessToken;
-      if (token) return token;
+      const data = JSON.parse(raw);
+      if (data?.claudeAiOauth?.accessToken) return data.claudeAiOauth.accessToken;
     } catch {}
   }
   return null;
 }
 
-// Devuelve los datos de uso, o lanza error con .status para distinguir 401 vs otros
+// Devuelve 'max' | 'pro' | 'unknown'
+function getSubscriptionType() {
+  const creds = readCredentials();
+  const sub = creds?.claudeAiOauth?.subscriptionType?.toLowerCase() || 'unknown';
+  // max_5x, max_20x, max → todo lo que empiece por 'max' es Max
+  if (sub.startsWith('max')) return 'max';
+  if (sub === 'pro') return 'pro';
+  return 'unknown';
+}
+
+// -- Modo A: OAuth (Max) ------------------------------------------------------
+
 async function fetchViaOAuth(token) {
   const res = await fetch('https://api.anthropic.com/api/oauth/usage', {
     headers: {
@@ -81,7 +100,7 @@ async function fetchViaOAuth(token) {
   throw err;
 }
 
-// -- Modo B: Playwright -------------------------------------------------------
+// -- Modo B: Playwright (Pro y Max) -------------------------------------------
 
 async function buildPlaywrightFetcher(sessionKey) {
   const { chromium } = require('playwright-extra');
@@ -102,7 +121,7 @@ async function buildPlaywrightFetcher(sessionKey) {
     await page.waitForTimeout(2000);
   } catch {}
 
-  async function fetch() {
+  async function fetchUsage() {
     if (!orgId) {
       const bsRes = await page.evaluate(async () => {
         const r = await window.fetch('https://claude.ai/api/bootstrap', {
@@ -125,60 +144,15 @@ async function buildPlaywrightFetcher(sessionKey) {
     return JSON.parse(usageRes.body);
   }
 
-  return { fetch, browser };
+  return { fetchUsage, browser };
 }
 
-// -- Entry point --------------------------------------------------------------
-
-async function run() {
-  const oauthToken = getClaudeCodeToken();
-
-  // Intentar Modo A primero
-  if (oauthToken) {
-    try {
-      const data = await fetchViaOAuth(oauthToken);
-      writeOk(data, 'claude-code');
-      // Modo A funciona — seguir con polling OAuth
-      setInterval(async () => {
-        try {
-          const freshToken = getClaudeCodeToken() || oauthToken;
-          const d = await fetchViaOAuth(freshToken);
-          writeOk(d, 'claude-code');
-        } catch (e) {
-          writeErr(e.message);
-        }
-      }, POLL_INTERVAL_MS);
-      return;
-    } catch (e) {
-      if (e.status === 401) {
-        process.stdout.write('OAuth 401 (plan Pro) — cambiando a Modo B (Playwright)\n');
-        // Caer a Modo B abajo
-      } else {
-        writeErr(e.message);
-        // Reintentar en el siguiente poll
-        setInterval(async () => {
-          try {
-            const freshToken = getClaudeCodeToken() || oauthToken;
-            const d = await fetchViaOAuth(freshToken);
-            writeOk(d, 'claude-code');
-          } catch (e2) { writeErr(e2.message); }
-        }, POLL_INTERVAL_MS);
-        return;
-      }
-    }
-  }
-
-  // Modo B: Playwright + sessionKey
-  if (!SESSION_KEY) {
-    writeErr('Plan Pro detectado: configura claudeUsage.cookies con tu sessionKey de claude.ai');
-    process.exit(1);
-  }
-
-  const { fetch: playwrightFetch, browser } = await buildPlaywrightFetcher(SESSION_KEY);
+async function runPlaywrightMode(sessionKey) {
+  const { fetchUsage, browser } = await buildPlaywrightFetcher(sessionKey);
 
   async function poll() {
     try {
-      const data = await playwrightFetch();
+      const data = await fetchUsage();
       writeOk(data, 'claude-ai');
     } catch (e) {
       writeErr(e.message);
@@ -190,6 +164,52 @@ async function run() {
 
   process.on('SIGTERM', async () => { await browser.close(); process.exit(0); });
   process.on('SIGINT',  async () => { await browser.close(); process.exit(0); });
+}
+
+// -- Entry point --------------------------------------------------------------
+
+async function run() {
+  const subscriptionType = getSubscriptionType();
+  const oauthToken       = getClaudeCodeToken();
+
+  process.stdout.write(`plan detectado: ${subscriptionType}\n`);
+
+  // Plan Max con Claude Code → Modo A directo (sin Playwright)
+  if (subscriptionType === 'max' && oauthToken) {
+    try {
+      const data = await fetchViaOAuth(oauthToken);
+      writeOk(data, 'claude-code');
+      setInterval(async () => {
+        try {
+          const fresh = getClaudeCodeToken() || oauthToken;
+          writeOk(await fetchViaOAuth(fresh), 'claude-code');
+        } catch (e) {
+          // Si OAuth falla en polling → no es fatal, reintentar en siguiente ciclo
+          if (e.status !== 401) writeErr(e.message);
+        }
+      }, POLL_INTERVAL_MS);
+      return;
+    } catch (e) {
+      if (e.status === 401) {
+        process.stdout.write('OAuth 401 inesperado en Max → fallback Playwright\n');
+        // Caer a Playwright abajo
+      } else {
+        writeErr(e.message);
+        return;
+      }
+    }
+  }
+
+  // Plan Pro, desconocido, o fallback desde Max con 401 → Modo B (Playwright)
+  if (!SESSION_KEY) {
+    const hint = subscriptionType === 'pro'
+      ? 'Plan Pro detectado: configura claudeUsage.cookies con tu sessionKey de claude.ai'
+      : 'No se encontraron credenciales validas. Configura claudeUsage.cookies en VS Code settings.';
+    writeErr(hint);
+    process.exit(1);
+  }
+
+  await runPlaywrightMode(SESSION_KEY);
 }
 
 run().catch(e => {

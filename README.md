@@ -1,127 +1,126 @@
 # ☁️ Claude Usage Bar
 
-Extensión para **VS Code y Cursor** que muestra en tiempo real el uso de Claude — ventana de 5 horas y 7 días — directamente en la barra de estado.
+Extension para **VS Code y Cursor** que muestra en tiempo real el uso de Claude — ventana de 5 horas y 7 dias — directamente en la barra de estado.
 
 ```
-☁ CC 73% · 25%
+☁ CC 73% · 25%    ← Claude Code OAuth (plan Max)
+☁ AI 73% · 25%    ← claude.ai sessionKey (plan Pro o Max)
 ```
 
-**Auto-detecta Claude Code** — si lo tienes instalado, funciona sin configuración. Para quienes no usan Claude Code, incluye el método alternativo vía sessionKey (basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/claude-usage-bar)).
+**Auto-detecta Claude Code** si lo tienes instalado. Para plan Pro o sin Claude Code, usa sessionKey (basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/claude-usage-bar), miembro de [SaaS Factory](https://www.saasfactory.so)).
 
-> ⚡ **Instalación en un solo paso (Windows):** clona el repo, haz doble clic en `install.bat` y listo.
+> ⚡ **Instalacion en un solo paso (Windows):** clona el repo, ejecuta `.\install.bat` y listo.
+
+> **Nota:** Ver los porcentajes de uso no consume tokens ni cuota. Es una llamada HTTP simple, equivalente a consultar tu saldo.
 
 ---
 
-## ¿Qué modo se aplica a ti?
+## Que modo se aplica a ti?
 
-| Situación | Modo | Setup |
+| Situacion | Modo | Setup |
 |---|---|---|
-| Tienes Claude Code instalado | **A — OAuth automático** | Ninguno ✅ |
-| No tienes Claude Code | **B — sessionKey** | Requiere configuración |
+| Claude Code instalado + plan **Max** | **A — OAuth automatico** | Ninguno ✅ |
+| Claude Code instalado + plan **Pro** | **B — sessionKey** | Requiere configuracion |
+| Sin Claude Code | **B — sessionKey** | Requiere configuracion |
 
 > **Nota:** claude.ai y Claude Code comparten la misma cuota (plan Pro/Max). Los porcentajes son equivalentes en ambos modos.
 
-> **Nota:** Ver, leer y mostrar los porcentajes de uso **no consume tokens ni cuota**. Es una llamada HTTP simple al API de Anthropic, equivalente a consultar tu saldo.
-
 ---
 
-## Instalación rápida (Windows)
+## Instalacion rapida (Windows)
 
 ```bash
 git clone https://github.com/Asesorian/claude-usage-bar.git
 cd claude-usage-bar
+.\install.bat
 ```
 
-Luego doble clic en **`install.bat`**. El script hace todo automáticamente:
+El script hace todo automaticamente:
 1. Comprueba Node.js
 2. Instala dependencias y compila TypeScript
-3. Empaqueta la extensión (`.vsix`)
+3. Empaqueta la extension (.vsix)
 4. La instala en VS Code o Cursor
 
 Reinicia VS Code / Cursor al terminar.
 
 ---
 
-## Modo A — Claude Code (recomendado, zero config)
+## Modo A — Claude Code OAuth (plan Max, zero config)
 
-Si tienes Claude Code instalado, la extensión detecta automáticamente tus credenciales:
+Si tienes Claude Code instalado y plan **Max**, la extension detecta las credenciales automaticamente:
 
 - **Windows / Linux:** lee `~/.claude/.credentials.json`
 - **Mac (Claude Code moderno):** mismo fichero
 - **Mac (Claude Code antiguo):** macOS Keychain como fallback
 
-No necesitas configurar nada. Instala la extensión y listo.
+No necesitas configurar nada.
 
-**Ventajas sobre Modo B:**
+**Ventajas:**
 - Sin Playwright ni Chromium (~150 MB ahorrados)
 - Sin sessionKey que caduque
-- Arranque instantáneo
+- Arranque instantaneo
 
 ---
 
-## Modo B — sessionKey (sin Claude Code)
+## Modo B — sessionKey (plan Pro o sin Claude Code)
 
-Solo necesario si no usas Claude Code.
+### 1. Instala la extension
 
-### 1. Instala la extensión
-
-**Windows:** usa `install.bat` (ver arriba).
+**Windows:** usa `.\install.bat` (ver arriba).
 
 **Mac / Linux — manual:**
 ```bash
 npm install
 npm run compile
 npx vsce package --no-dependencies --allow-missing-repository
-# Instala el .vsix generado:
 code --install-extension claude-usage-bar-*.vsix
 ```
 
-> ⏳ **Primera vez:** instala Playwright + Chromium (~150 MB). Tarda ~2 min. Solo ocurre una vez dentro de VS Code al activarse.
+> La primera vez que se activa en VS Code instala Playwright + Chromium (~150 MB). Solo ocurre una vez, tarda ~2 min.
 
 ### 2. Obtén tu sessionKey
 
-1. Abre [claude.ai](https://claude.ai) con sesión activa
+1. Abre [claude.ai](https://claude.ai) con sesion activa
 2. `F12` → **Application** → **Cookies** → `https://claude.ai`
-3. Copia el valor de `sessionKey`
+3. Copia el valor de la cookie `sessionKey`
 
-### 3. Configura la extensión
+### 3. Configura la extension
 
 ```
 Ctrl+Shift+P → Open User Settings (JSON)
 ```
 
+Añade esta linea (con coma en la linea anterior si no es la ultima):
+
 ```json
 "claudeUsage.cookies": "sessionKey=sk-ant-XXXXXX..."
 ```
 
-> ⚠️ La `sessionKey` queda en texto plano en settings.json. Si tienes **Settings Sync** activado, se sincroniza a la nube de Microsoft. Tenlo en cuenta.
+Guarda. En ~15 segundos apareceran los porcentajes en la barra.
+
+> ⚠️ La sessionKey queda en texto plano en settings.json. Si tienes **Settings Sync** activado se sincroniza a la nube de Microsoft. Tenlo en cuenta.
 
 ---
 
 ## Barra de estado
 
-```
-☁ CC 73% · 25%    ← Claude Code OAuth (Modo A)
-☁ AI 73% · 25%    ← claude.ai sessionKey (Modo B)
-```
-
-| Número | Ventana |
+| Numero | Ventana |
 |---|---|
 | Primero | 5 horas |
-| Segundo | 7 días |
+| Segundo | 7 dias |
 
 **Hover** → tabla completa con tiempo exacto hasta el reseteo de cada ventana.
 
 **Colores:**
-- 🟢 Verde: < 80%
-- 🟠 Naranja: 80–90%
-- 🔴 Rojo: > 90%
+- Verde: menos del 80%
+- Naranja: 80-90%
+- Rojo: mas del 90%
 
 ---
 
 ## Compatibilidad
 
-| Sistema | Modo A | Modo B | install.bat |
+| Sistema | Modo A (Max) | Modo B (Pro/Max) | install.bat |
 |---|---|---|---|
 | Windows | ✅ | ✅ | ✅ |
 | macOS | ✅ | ✅ | ❌ manual |
@@ -132,21 +131,29 @@ Ctrl+Shift+P → Open User Settings (JSON)
 ## Requisitos
 
 - VS Code 1.80+ o Cursor
-- Node.js instalado (para compilar — solo al instalar)
-- **Modo A:** Claude Code instalado (cualquier versión)
-- **Modo B:** sessionKey de claude.ai
+- Node.js instalado (solo para compilar al instalar)
+- **Modo A:** Claude Code + plan Max
+- **Modo B:** sessionKey de claude.ai (plan Pro o Max)
+
+---
+
+## Desinstalar
+
+```bash
+code --uninstall-extension asesorian.claude-usage-bar
+```
 
 ---
 
 ## ⚠️ Aviso
 
-Esta extensión usa la API OAuth interna de Anthropic y la API interna de claude.ai (no oficiales). Anthropic podría modificarlas en cualquier momento. Úsala bajo tu propio criterio.
+Esta extension usa la API OAuth interna de Anthropic y la API interna de claude.ai (no oficiales). Anthropic podria modificarlas en cualquier momento. Usala bajo tu propio criterio.
 
 ---
 
-## Créditos
+## Creditos
 
-Basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/claude-usage-bar), miembro de [SaaS Factory](https://www.saasfactory.so) — comunidad de builders hispanohablantes liderada por Daniel Carreón.  
-Mejoras: instalador one-shot (`install.bat`), detección automática Claude Code, soporte Mac Keychain, modo OAuth sin Playwright, compatibilidad Windows/Mac/Linux.
+Basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/claude-usage-bar), miembro de [SaaS Factory](https://www.saasfactory.so) — comunidad de builders hispanohablantes liderada por Daniel Carreon.
+Mejoras: instalador one-shot (install.bat), deteccion automatica Claude Code, soporte Mac Keychain, fallback automatico OAuth→Playwright, compatibilidad Windows/Mac/Linux.
 
 Hecho con ☁️ + [Claude Code](https://claude.ai/code)

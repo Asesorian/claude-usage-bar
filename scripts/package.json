@@ -1,11 +1,10 @@
 {
   "name": "claude-usage-deps",
   "version": "1.0.0",
-  "description": "Dependencias runtime. Playwright para Modo B, chrome-cookies-secure para auto-deteccion sessionKey.",
+  "description": "Dependencias runtime. Playwright para Modo B.",
   "dependencies": {
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "playwright": "^1.40.0",
-    "chrome-cookies-secure": "^1.1.0"
+    "playwright": "^1.40.0"
   }
 }

@@ -8,7 +8,7 @@ echo  ==========================================
 echo.
 
 :: 1. Comprobar Node.js
-echo  [1/4] Comprobando Node.js...
+echo  [1/5] Comprobando Node.js...
 node --version >nul 2>&1
 if errorlevel 1 (
     echo  ERROR: Node.js no encontrado.
@@ -20,7 +20,7 @@ for /f "tokens=*" %%v in ('node --version') do echo  OK: Node.js %%v
 
 :: 2. Instalar dependencias y compilar
 echo.
-echo  [2/4] Instalando dependencias y compilando...
+echo  [2/5] Instalando dependencias y compilando...
 call npm install --silent
 if errorlevel 1 ( echo  ERROR en npm install & pause & exit /b 1 )
 call npm run compile
@@ -29,7 +29,7 @@ echo  OK: Compilacion completada
 
 :: 3. Empaquetar
 echo.
-echo  [3/4] Empaquetando extension (.vsix)...
+echo  [3/5] Empaquetando extension (.vsix)...
 call npx vsce package --no-dependencies --allow-missing-repository
 if errorlevel 1 (
     call npm install -g @vscode/vsce --silent
@@ -46,12 +46,36 @@ if "!VSIX_FILE!"=="" (
 )
 echo  OK: Paquete generado: !VSIX_FILE!
 
-:: 4. Instalar en VS Code o Cursor
+:: 4. Pre-instalar deps runtime en globalStorage (evita espera dentro de VS Code)
 echo.
-echo  [4/4] Instalando en VS Code...
+echo  [4/5] Pre-instalando dependencias runtime (Playwright + chromium)...
+echo  Esto puede tardar 3-5 minutos la primera vez (descarga ~150 MB)...
+echo  Por favor espera sin cerrar esta ventana.
+echo.
+
+set STORAGE_DIR=%APPDATA%\Code\User\globalStorage\asesorian.claude-usage-bar
+if not exist "!STORAGE_DIR!" mkdir "!STORAGE_DIR!"
+
+set DEPS_MARKER=!STORAGE_DIR!\node_modules\playwright-extra
+if exist "!DEPS_MARKER!" (
+    echo  OK: Dependencias ya instaladas, saltando...
+) else (
+    copy /Y "scripts\package.json" "!STORAGE_DIR!\package.json" >nul
+    copy /Y "scripts\server.js" "!STORAGE_DIR!\server.js" >nul
+    pushd "!STORAGE_DIR!"
+    call npm install --silent
+    if errorlevel 1 ( popd & echo  ERROR instalando deps runtime & pause & exit /b 1 )
+    call npx playwright install chromium
+    if errorlevel 1 ( popd & echo  ERROR instalando Chromium & pause & exit /b 1 )
+    popd
+    echo  OK: Dependencias runtime instaladas
+)
+
+:: 5. Instalar extension en VS Code o Cursor
+echo.
+echo  [5/5] Instalando extension...
 code --install-extension "!VSIX_FILE!"
 if errorlevel 1 (
-    echo  VS Code no encontrado, probando Cursor...
     cursor --install-extension "!VSIX_FILE!"
     if errorlevel 1 (
         echo.
@@ -68,6 +92,8 @@ if errorlevel 1 (
 echo.
 echo  ==========================================
 echo   Listo! Reinicia VS Code / Cursor.
+echo   Los porcentajes apareceran en la barra
+echo   de estado al arrancar.
 echo  ==========================================
 echo.
 pause

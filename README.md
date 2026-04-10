@@ -7,7 +7,6 @@ Extension para **VS Code y Cursor** que muestra en tiempo real el uso de Claude 
 ☁ AI 73% · 25%    ← claude.ai sessionKey (plan Pro o Max)
 ```
 
-**Zero config en la mayoria de casos** — detecta automaticamente tus credenciales.
 Basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/claude-usage-bar), miembro de [SaaS Factory](https://www.saasfactory.so).
 
 > ⚡ **Windows:** clona el repo y ejecuta `.\install.bat`. Listo.
@@ -21,9 +20,7 @@ Basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/clau
 | Situacion | Configuracion necesaria |
 |---|---|
 | Claude Code instalado + plan **Max** | **Ninguna** — OAuth automatico ✅ |
-| Plan **Pro** + Chrome o Edge abierto en claude.ai | **Ninguna** — auto-lee la cookie ✅ |
-| Plan **Pro/Max** + Firefox | sessionKey manual (ver abajo) |
-| Sin Claude Code y sin Chrome/Edge | sessionKey manual (ver abajo) |
+| Plan **Pro** (con o sin Claude Code) | sessionKey manual (ver abajo) |
 
 > claude.ai y Claude Code comparten la misma cuota (plan Pro/Max). Los porcentajes son iguales independientemente del modo usado.
 
@@ -43,7 +40,8 @@ El script hace todo automaticamente:
 1. Comprueba Node.js
 2. Instala dependencias y compila TypeScript
 3. Empaqueta la extension (.vsix)
-4. La instala en VS Code o Cursor
+4. Pre-instala Playwright + Chromium (~150 MB) — puede tardar 3-5 min la primera vez
+5. Instala la extension en VS Code o Cursor
 
 Reinicia VS Code / Cursor al terminar.
 
@@ -58,13 +56,11 @@ npx vsce package --no-dependencies --allow-missing-repository
 code --install-extension claude-usage-bar-*.vsix
 ```
 
-> La primera vez que se activa instala Playwright + Chromium (~150 MB) y chrome-cookies-secure. Solo ocurre una vez, tarda ~2 min.
+> La primera vez que se activa en VS Code instala Playwright + Chromium (~150 MB). Solo ocurre una vez.
 
 ---
 
-## Configuracion manual de sessionKey (solo si la auto-deteccion no funciona)
-
-Necesario si usas Firefox o si chrome-cookies-secure no puede acceder a tu perfil de Chrome/Edge.
+## Configuracion sessionKey (plan Pro)
 
 ### 1. Obtén tu sessionKey
 
@@ -82,9 +78,11 @@ Ctrl+Shift+P → Open User Settings (JSON)
 "claudeUsage.cookies": "sessionKey=sk-ant-XXXXXX..."
 ```
 
-Guarda. En unos segundos apareceran los porcentajes.
+Guarda. En unos segundos apareceran los porcentajes en la barra.
 
 > La sessionKey queda en texto plano en settings.json. Si tienes **Settings Sync** activado se sincroniza a la nube de Microsoft.
+
+> La sessionKey es valida mientras tengas sesion activa en claude.ai. Si caduca, repite los pasos anteriores con el nuevo valor.
 
 ---
 
@@ -106,11 +104,11 @@ Guarda. En unos segundos apareceran los porcentajes.
 
 ## Compatibilidad
 
-| Sistema | Max (OAuth) | Pro auto Chrome/Edge | Pro manual sessionKey | install.bat |
-|---|---|---|---|---|
-| Windows | ✅ | ✅ | ✅ | ✅ |
-| macOS | ✅ | ✅ | ✅ | ❌ manual |
-| Linux | ✅ | ⚠️ solo Chrome | ✅ | ❌ manual |
+| Sistema | Max (OAuth) | Pro (sessionKey) | install.bat |
+|---|---|---|---|
+| Windows | ✅ | ✅ | ✅ |
+| macOS | ✅ | ✅ | ❌ manual |
+| Linux | ✅ | ✅ | ❌ manual |
 
 ---
 
@@ -119,8 +117,7 @@ Guarda. En unos segundos apareceran los porcentajes.
 - VS Code 1.80+ o Cursor
 - Node.js (solo para compilar al instalar)
 - **Max OAuth:** Claude Code instalado + plan Max
-- **Pro auto:** Chrome o Edge con sesion activa en claude.ai
-- **Pro manual:** sessionKey de claude.ai en VS Code settings
+- **Pro sessionKey:** sessionKey de claude.ai en VS Code settings
 
 ---
 
@@ -142,6 +139,6 @@ Esta extension usa la API OAuth interna de Anthropic y la API interna de claude.
 
 Basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/claude-usage-bar), miembro de [SaaS Factory](https://www.saasfactory.so) — comunidad de builders hispanohablantes liderada por Daniel Carreon.
 
-Mejoras: zero-config para Pro via Chrome/Edge, OAuth para Max, install.bat one-shot, deteccion automatica plan, soporte Mac Keychain, compatibilidad Windows/Mac/Linux.
+Mejoras: OAuth automatico para plan Max, install.bat one-shot con pre-instalacion de deps, deteccion automatica de plan Pro/Max, soporte Mac Keychain, compatibilidad Windows/Mac/Linux.
 
 Hecho con Claude Code.

@@ -10,8 +10,6 @@ let serverProcess: ChildProcess | undefined;
 let usageFile: string;
 let storageDir: string;
 
-// -- Deteccion plan y credenciales -------------------------------------------
-
 function readClaudeCredentials(): any {
   try {
     const credsPath = path.join(os.homedir(), '.claude', '.credentials.json');
@@ -34,8 +32,6 @@ function getSubscriptionType(): 'max' | 'pro' | 'unknown' {
   if (sub === 'pro') return 'pro';
   return 'unknown';
 }
-
-// -- Activacion --------------------------------------------------------------
 
 export async function activate(context: vscode.ExtensionContext) {
   storageDir = context.globalStorageUri.fsPath;
@@ -61,8 +57,6 @@ export async function activate(context: vscode.ExtensionContext) {
   pollTimer = setInterval(readAndShow, 5000);
 }
 
-// -- Setup -------------------------------------------------------------------
-
 async function ensureSetup(context: vscode.ExtensionContext) {
   fs.mkdirSync(storageDir, { recursive: true });
 
@@ -71,16 +65,8 @@ async function ensureSetup(context: vscode.ExtensionContext) {
   const dst = path.join(storageDir, 'server.js');
   fs.copyFileSync(src, dst);
 
-  const subType      = getSubscriptionType();
-  const hasClaudeCode = getClaudeCodeToken() !== null;
-
-  // Plan Max + Claude Code: solo necesita OAuth, no Playwright
-  if (subType === 'max' && hasClaudeCode) {
-    statusBarItem.text = '$(cloud) Claude: listo (Max, OAuth)';
-    return;
-  }
-
-  // Cualquier otro caso: instalar deps (Playwright + chrome-cookies-secure)
+  // Siempre instalar deps — necesarios para Playwright Y chrome-cookies-secure
+  // independientemente del plan o de si Claude Code esta instalado
   const depsMarker = path.join(storageDir, 'node_modules', 'playwright-extra');
   if (!fs.existsSync(depsMarker)) {
     const pkgSrc = path.join(context.extensionPath, 'scripts', 'package.json');
@@ -108,16 +94,12 @@ function runCommand(cmd: string, cwd: string): Promise<void> {
   });
 }
 
-// -- Servidor ----------------------------------------------------------------
-
 function startServer(context: vscode.ExtensionContext) {
-  const cookies   = vscode.workspace.getConfiguration('claudeUsage').get<string>('cookies', '').trim();
-  const match     = cookies.match(/sessionKey=([^;]+)/);
+  const cookies    = vscode.workspace.getConfiguration('claudeUsage').get<string>('cookies', '').trim();
+  const match      = cookies.match(/sessionKey=([^;]+)/);
   const sessionKey = match ? match[1].trim() : cookies.trim();
 
   const serverScript = path.join(storageDir, 'server.js');
-
-  // Pasar sessionKey si hay. Si no, server.js intentara auto-deteccion desde Chrome/Edge
   const args = sessionKey
     ? [serverScript, usageFile, sessionKey]
     : [serverScript, usageFile];
@@ -140,8 +122,6 @@ function restartServer(context: vscode.ExtensionContext) {
   if (serverProcess) { serverProcess.kill(); serverProcess = undefined; }
   startServer(context);
 }
-
-// -- Barra de estado ---------------------------------------------------------
 
 function readAndShow() {
   try {
@@ -200,8 +180,6 @@ function buildTooltip(data: any): vscode.MarkdownString {
   md.isTrusted = true;
   return md;
 }
-
-// -- Desactivacion -----------------------------------------------------------
 
 export function deactivate() {
   if (pollTimer) clearInterval(pollTimer);

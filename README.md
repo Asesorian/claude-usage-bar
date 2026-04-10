@@ -118,7 +118,7 @@ Esta extensión usa la API OAuth interna de Anthropic y la API interna de claude
 
 ## Créditos
 
-Basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/claude-usage-bar).  
-Mejoras: detección automática Claude Code, soporte Mac Keychain, modo OAuth sin Playwright.
+Basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/claude-usage-bar), miembro de [SaaS Factory](https://www.saasfactory.so) — comunidad de builders hispanohablantes liderada por Daniel Carreón.  
+Mejoras: detección automática Claude Code, soporte Mac Keychain, modo OAuth sin Playwright, compatibilidad Windows/Mac/Linux.
 
 Hecho con ☁️ + [Claude Code](https://claude.ai/code)

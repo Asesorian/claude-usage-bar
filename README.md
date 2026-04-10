@@ -8,6 +8,8 @@ Extensión para **VS Code y Cursor** que muestra en tiempo real el uso de Claude
 
 **Auto-detecta Claude Code** — si lo tienes instalado, funciona sin configuración. Para quienes no usan Claude Code, incluye el método alternativo vía sessionKey (basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/claude-usage-bar)).
 
+> ⚡ **Instalación en un solo paso (Windows):** clona el repo, haz doble clic en `install.bat` y listo.
+
 ---
 
 ## ¿Qué modo se aplica a ti?
@@ -18,6 +20,25 @@ Extensión para **VS Code y Cursor** que muestra en tiempo real el uso de Claude
 | No tienes Claude Code | **B — sessionKey** | Requiere configuración |
 
 > **Nota:** claude.ai y Claude Code comparten la misma cuota (plan Pro/Max). Los porcentajes son equivalentes en ambos modos.
+
+> **Nota:** Ver, leer y mostrar los porcentajes de uso **no consume tokens ni cuota**. Es una llamada HTTP simple al API de Anthropic, equivalente a consultar tu saldo.
+
+---
+
+## Instalación rápida (Windows)
+
+```bash
+git clone https://github.com/Asesorian/claude-usage-bar.git
+cd claude-usage-bar
+```
+
+Luego doble clic en **`install.bat`**. El script hace todo automáticamente:
+1. Comprueba Node.js
+2. Instala dependencias y compila TypeScript
+3. Empaqueta la extensión (`.vsix`)
+4. La instala en VS Code o Cursor
+
+Reinicia VS Code / Cursor al terminar.
 
 ---
 
@@ -42,14 +63,20 @@ No necesitas configurar nada. Instala la extensión y listo.
 
 Solo necesario si no usas Claude Code.
 
-### 1. Instala la extensión desde `.vsix`
+### 1. Instala la extensión
 
-Ve a [Releases](../../releases), descarga el `.vsix` e instala:
-```
-Ctrl+Shift+P → Extensions: Install from VSIX...
+**Windows:** usa `install.bat` (ver arriba).
+
+**Mac / Linux — manual:**
+```bash
+npm install
+npm run compile
+npx vsce package --no-dependencies --allow-missing-repository
+# Instala el .vsix generado:
+code --install-extension claude-usage-bar-*.vsix
 ```
 
-> ⏳ **Primera vez:** instala Playwright + Chromium (~150 MB). Tarda ~2 min. Solo ocurre una vez.
+> ⏳ **Primera vez:** instala Playwright + Chromium (~150 MB). Tarda ~2 min. Solo ocurre una vez dentro de VS Code al activarse.
 
 ### 2. Obtén tu sessionKey
 
@@ -94,19 +121,20 @@ Ctrl+Shift+P → Open User Settings (JSON)
 
 ## Compatibilidad
 
-| Sistema | Modo A | Modo B |
-|---|---|---|
-| Windows | ✅ | ✅ |
-| macOS | ✅ | ✅ |
-| Linux | ✅ | ✅ |
+| Sistema | Modo A | Modo B | install.bat |
+|---|---|---|---|
+| Windows | ✅ | ✅ | ✅ |
+| macOS | ✅ | ✅ | ❌ manual |
+| Linux | ✅ | ✅ | ❌ manual |
 
 ---
 
 ## Requisitos
 
 - VS Code 1.80+ o Cursor
+- Node.js instalado (para compilar — solo al instalar)
 - **Modo A:** Claude Code instalado (cualquier versión)
-- **Modo B:** Node.js instalado + sessionKey de claude.ai
+- **Modo B:** sessionKey de claude.ai
 
 ---
 
@@ -119,6 +147,6 @@ Esta extensión usa la API OAuth interna de Anthropic y la API interna de claude
 ## Créditos
 
 Basado en el trabajo original de [Joel Tabasco](https://github.com/jtabasco/claude-usage-bar), miembro de [SaaS Factory](https://www.saasfactory.so) — comunidad de builders hispanohablantes liderada por Daniel Carreón.  
-Mejoras: detección automática Claude Code, soporte Mac Keychain, modo OAuth sin Playwright, compatibilidad Windows/Mac/Linux.
+Mejoras: instalador one-shot (`install.bat`), detección automática Claude Code, soporte Mac Keychain, modo OAuth sin Playwright, compatibilidad Windows/Mac/Linux.
 
 Hecho con ☁️ + [Claude Code](https://claude.ai/code)
